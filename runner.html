@@ -6,13 +6,34 @@
 </head>
 <body>
   <h2>Runner Tracker</h2>
-  <p id="status">Waiting for GPS...</p>
+  <p id="status">Initializing...</p>
+  <pre id="debug"></pre>
 
   <script>
+    const debug = document.getElementById('debug');
+    const status = document.getElementById('status');
+
     // --- Supabase setup ---
     const SUPABASE_URL = 'https://eihbgchbspygkqovaqnu.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpaGJnY2hic3B5Z2txb3ZhcW51Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2NTQzMjcsImV4cCI6MjA3NjIzMDMyN30.FhNRkm7vG5kb8GbJvW0pemuiENCOQfOjBSuNXj_gEXI';
     const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Test Supabase connection by fetching the first 1 runner
+    async function testSupabase() {
+      try {
+        const { data, error } = await supabase.from('runners').select('*').limit(1);
+        if (error) {
+          debug.textContent += 'Supabase error: ' + JSON.stringify(error) + '\n';
+          status.textContent = 'Supabase connection failed';
+        } else {
+          debug.textContent += 'Supabase connected successfully. Sample data:\n' + JSON.stringify(data) + '\n';
+          status.textContent = 'Supabase connected. Waiting for GPS...';
+        }
+      } catch (e) {
+        debug.textContent += 'Exception: ' + e.message + '\n';
+        status.textContent = 'Supabase test failed';
+      }
+    }
 
     // Get runner name from URL
     const urlParams = new URLSearchParams(window.location.search);
@@ -21,23 +42,38 @@
     async function updateLocation(position) {
       const lat = position.coords.latitude;
       const lng = position.coords.longitude;
-      document.getElementById('status').innerText = `Latitude: ${lat}, Longitude: ${lng}`;
+      status.textContent = `Latitude: ${lat}, Longitude: ${lng}`;
 
-      // Upsert runner location (insert or update)
-      const { data, error } = await supabase
-        .from('runners')
-        .upsert({ name: runnerName, lat, lng, updated_at: new Date() }, { onConflict: ['name'] });
+      try {
+        const { data, error } = await supabase
+          .from('runners')
+          .upsert({ name: runnerName, lat, lng, updated_at: new Date() }, { onConflict: ['name'] });
 
-      if (error) console.error('Supabase error:', error);
+        if (error) {
+          debug.textContent += 'Supabase upsert error: ' + JSON.stringify(error) + '\n';
+        } else {
+          debug.textContent += `Location updated successfully at ${new Date().toLocaleTimeString()}\n`;
+        }
+      } catch (e) {
+        debug.textContent += 'Exception during upsert: ' + e.message + '\n';
+      }
     }
 
     function handleError(err) {
-      document.getElementById('status').innerText = 'Error getting location: ' + err.message;
+      status.textContent = 'Error getting location: ' + err.message;
+      debug.textContent += 'Geolocation error: ' + JSON.stringify(err) + '\n';
     }
+
+    // Initialize
+    testSupabase();
 
     // Watch GPS every 5 seconds
     if (navigator.geolocation) {
-      navigator.geolocation.watchPosition(updateLocation, handleError, { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 });
+      navigator.geolocation.watchPosition(updateLocation, handleError, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 5000
+      });
     } else {
       alert('Geolocation not supported');
     }
