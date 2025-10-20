@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Live Runner Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.31.0/dist/supabase.min.js"></script>
+  <style>#map { height: 90vh; width: 100%; }</style>
+</head>
+<body>
+  <h2>Live Runner Map</h2>
+  <div id="map"></div>
+
+  <script>
+    // --- Supabase setup ---
+    const SUPABASE_URL = 'https://eihbgchbspygkqovaqnu.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpaGJnY2hic3B5Z2txb3ZhcW51Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2NTQzMjcsImV4cCI6MjA3NjIzMDMyN30.FhNRkm7vG5kb8GbJvW0pemuiENCOQfOjBSuNXj_gEXI';
+    const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Initialize Leaflet map
+    const map = L.map('map').setView([0, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+
+    // Keep track of markers
+    const markers = {};
+
+    // Load all runners initially
+    async function loadRunners() {
+      const { data, error } = await supabase.from('runners').select('*');
+      if (error) { console.error(error); return; }
+      data.forEach(runner => {
+        markers[runner.name] = L.marker([runner.lat, runner.lng]).addTo(map).bindPopup(runner.name);
+      });
+    }
+
+    // Listen to real-time updates
+    supabase
+      .channel('public:runners')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'runners' }, payload => {
+        const r = payload.new;
+        if (markers[r.name]) {
+          markers[r.name].setLatLng([r.lat, r.lng]);
+        } else {
+          markers[r.name] = L.marker([r.lat, r.lng]).addTo(map).bindPopup(r.name);
+        }
+      })
+      .subscribe();
+
+    loadRunners();
+  </script>
+</body>
+</html>

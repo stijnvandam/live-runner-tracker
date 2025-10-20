@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Runner Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.31.0/dist/supabase.min.js"></script>
+</head>
+<body>
+  <h2>Runner Tracker</h2>
+  <p id="status">Waiting for GPS...</p>
+
+  <script>
+    // --- Supabase setup ---
+    const SUPABASE_URL = 'https://eihbgchbspygkqovaqnu.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpaGJnY2hic3B5Z2txb3ZhcW51Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2NTQzMjcsImV4cCI6MjA3NjIzMDMyN30.FhNRkm7vG5kb8GbJvW0pemuiENCOQfOjBSuNXj_gEXI';
+    const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Get runner name from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const runnerName = urlParams.get('name') || 'Anonymous';
+
+    async function updateLocation(position) {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      document.getElementById('status').innerText = `Latitude: ${lat}, Longitude: ${lng}`;
+
+      // Upsert runner location (insert or update)
+      const { data, error } = await supabase
+        .from('runners')
+        .upsert({ name: runnerName, lat, lng, updated_at: new Date() }, { onConflict: ['name'] });
+
+      if (error) console.error('Supabase error:', error);
+    }
+
+    function handleError(err) {
+      document.getElementById('status').innerText = 'Error getting location: ' + err.message;
+    }
+
+    // Watch GPS every 5 seconds
+    if (navigator.geolocation) {
+      navigator.geolocation.watchPosition(updateLocation, handleError, { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 });
+    } else {
+      alert('Geolocation not supported');
+    }
+  </script>
+</body>
+</html>
